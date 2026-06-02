@@ -1,0 +1,41 @@
+# HealthEngine -> Telegram daily booking-count bot
+#
+# Secrets (set with `wrangler secret put <NAME>`, never commit them):
+#   TELEGRAM_BOT_TOKEN   - BotFather token
+#   TELEGRAM_CHAT_ID     - chat to message
+#   TRIGGER_TOKEN        - guards the /run debug endpoint
+#
+# KV namespace (create with `wrangler kv namespace create ROSTER_KV`, paste the id below).
+
+name = "healthengine-apptcount"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+# DST-proof scheduling: Cloudflare cron is UTC-only and cannot express a DST-aware
+# local time. Sydney is UTC+11 (AEDT, summer) or UTC+10 (AEST, winter), so 07:00
+# Sydney is 20:00 UTC (AEDT) or 21:00 UTC (AEST). We fire at BOTH every day; the
+# scheduled handler computes the real Sydney local hour and only the firing that
+# lands on 07:00 local proceeds. The other (06:00/08:00 local) self-cancels.
+[triggers]
+crons = ["0 20 * * *", "0 21 * * *"]
+
+[vars]
+# The availability data is embedded in the web-plugin page HTML as an inline
+# `practice_data = {...}` object (NOT a separate JSON endpoint), so this is simply the
+# web-plugin URL for the practice. One fetch returns every published date (~4 weeks)
+# for every doctor; the date and doctor are selected in-process. The optional
+# __DATE__/__DOCTOR__ tokens are still substituted if a future URL form needs them.
+AVAILABILITY_URL = "https://healthengine.com.au/webplugin/?id=101936&source=webplugin"
+PRACTICE_ID = "101936"
+DOCTOR_ID = "137074"
+TIMEZONE = "Australia/Sydney"
+SEND_HOUR = "7"
+# Sanity guard: if available slots <= this in the morning, send "likely leave or
+# fully booked" instead of a confident count. Default 0.
+SANITY_THRESHOLD = "0"
+# Working weekdays (Sydney), 0=Sun .. 6=Sat. Mon, Tue, Thu, Sun.
+WORKING_DAYS = "0,1,2,4"
+
+[[kv_namespaces]]
+binding = "ROSTER_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

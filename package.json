@@ -1,0 +1,22 @@
+{
+  "name": "healthengine-apptcount",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker that sends a daily Telegram message with the number of patients booked under Dr Brandon Lee, inferred from HealthEngine's public availability feed.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:scheduled": "wrangler dev --test-scheduled",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.60.0"
+  },
+  "packageManager": "pnpm@11.5.0"
+}
