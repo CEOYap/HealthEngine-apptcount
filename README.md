@@ -27,7 +27,7 @@ practice_data = { "General Practice": { "doctors": { "137074": {
 returns every published date (~4 weeks ahead) for every doctor, so **no DevTools capture
 is required** — `AVAILABILITY_URL` is just the web-plugin URL.
 
-- **Stack:** TypeScript, Cloudflare Workers + Cron Triggers + KV, pnpm, Vitest.
+- **Stack:** TypeScript, Cloudflare Workers + Cron Triggers, pnpm, Vitest.
 - **Timezone:** Australia/Sydney, **DST-aware** (AEST UTC+10 / AEDT UTC+11). The send
   time and roster weekday are both Sydney-local.
 - **Outbound-only:** the Worker calls HealthEngine and Telegram; the only inbound
@@ -76,15 +76,6 @@ wrangler secret put TELEGRAM_CHAT_ID
 wrangler secret put TRIGGER_TOKEN      # any long random string; guards /run
 ```
 
-### 4. Create the KV namespace (self-learning roster)
-
-```bash
-wrangler kv namespace create ROSTER_KV
-```
-
-Paste the printed `id` into `wrangler.toml` under `[[kv_namespaces]]`, replacing
-`REPLACE_WITH_KV_NAMESPACE_ID`.
-
 ---
 
 ## The availability source (already wired)
@@ -120,18 +111,25 @@ The `debug=1` JSON includes `raw.availableDates`, `raw.slots`, and the resolved
 
 ---
 
-## Seeding the roster
+## How the roster works
 
-Edit [`src/config.ts`](src/config.ts) → `STATIC_ROSTER`. For each working weekday, list
-the full set of slot start-times you work as `"HH:mm"`. **Capture these from the feed
-on a zero-booking day** (e.g. an empty future Monday such as **2026-06-15**) so times
-and granularity match the feed exactly.
+There is no fixed list of slot times. Each day's roster is **generated** by
+[`src/roster.ts`](src/roster.ts) from the rules in [`src/config.ts`](src/config.ts):
 
-You don't have to be exhaustive: the **KV self-learning** roster
-([`src/roster.ts`](src/roster.ts)) unions every observed available time into the stored
-set per weekday, so the roster converges over time and the stale-roster guard
-self-corrects. The first time an unseen slot appears you'll get a one-off
-"roster outdated" message; after that it's learned.
+```
+roster = every SLOT_MINUTES slot from DAY_START[weekday] to the last available slot,
+         minus the half-hourly BREAK_MINUTES blocks (:20 and :50)
+```
+
+- **Variable finishing time:** the end of the day is the last slot HealthEngine is
+  publishing, so finishing at 15:10 one week and 16:40 the next needs no change.
+  The trade-off: bookings *after* your last open slot can't be seen by the public feed
+  and aren't counted. The message says which range was counted.
+- **Half-hourly blocks:** the `Unavailable` blocks at :20 and :50 are never counted as
+  bookings. If one is published as available on a given day, it's just counted as a
+  normal slot, so no alert.
+- **Start time:** set `DAY_START` per weekday. If an earlier slot is published, the day
+  simply starts earlier.
 
 ---
 
@@ -139,7 +137,7 @@ self-corrects. The first time an unseen slot appears you'll get a one-off
 
 | Guard | Trigger | Message |
 |-------|---------|---------|
-| **Stale-roster** | an available time is **not** in the roster (`available ⊄ roster`) | "Roster looks outdated — update it" (avoids a wrong/negative count) |
+| **Stale-roster** | an available time is off the `SLOT_MINUTES` grid (e.g. 15-min slots appear) | "Roster looks outdated": update `SLOT_MINUTES` (avoids a wrong count) |
 | **Sanity** | available slots `≤ SANITY_THRESHOLD` (default 0) | "Likely on leave or fully booked — please check" (the feed can't tell these apart) |
 | **Error** | fetch/parse failure | "🚨 Booking bot broke …" instead of silent failure |
 
@@ -183,12 +181,11 @@ pnpm typecheck     # tsc --noEmit
 ```
 
 Your main loop while editing logic — the parser, guards, time/DST helpers and
-self-learning are all covered here.
+roster rules are all covered here.
 
 ### 2. Local Worker + live dry-runs (`pnpm dev`)
 
-`wrangler dev` runs the real Worker locally (Miniflare) with **KV simulated on disk**
-(no real namespace needed) and secrets read from a git-ignored **`.dev.vars`** file.
+`wrangler dev` runs the real Worker locally (Miniflare) with secrets read from a git-ignored **`.dev.vars`** file.
 Create one so the `/run` endpoint is usable — for dry-runs the Telegram values can be
 dummies:
 
@@ -217,13 +214,6 @@ curl.exe "http://localhost:8787/run?token=localtest&date=2026-06-30&send=false&d
 curl.exe "http://localhost:8787/run?token=localtest"
 ```
 
-Because local KV persists between requests, running two dates back-to-back shows the
-self-learning in action:
-
-1. A **far-out date** (emptiest, ~full roster) is learned → trips the stale guard once.
-2. A **nearer date** of the same weekday then subtracts against the learned roster and
-   reports a real booked count.
-
 ### 3. The scheduled (cron) path
 
 Miniflare does not fire cron triggers automatically:
@@ -239,8 +229,7 @@ not a failure. To exercise the send/compute logic regardless of the clock, use `
 from layer 2.
 
 > **Tip:** availability is published ~4 weeks ahead, so future dates are queryable and
-> are the easiest test targets — the furthest date shows your near-complete roster,
-> nearer dates show real bookings to subtract.
+> are the easiest test targets — nearer dates show real bookings to subtract.
 
 ---
 
@@ -260,7 +249,10 @@ morning.
 
 - **Leave vs fully booked** are indistinguishable from the public feed; the sanity
   guard flags both for a manual check.
-- **Partial blocks** (e.g. blocking just your last hour) read as bookings — residual
-  inaccuracy that only a calendar-based source could resolve (deferred; not built).
+- **Mid-day blocks** other than the :20/:50 pattern (e.g. blocking an hour for a
+  meeting) read as bookings. Blocking the *end* of the day is fine; it just moves the
+  cut-off earlier.
+- **Late bookings** after your last open slot aren't counted, because the public feed
+  can't tell "booked" from "not working" past that point.
 - The inline `practice_data` shape is **undocumented and may change**; if it does you'll
   get a "bot broke" alert and only need to update [`src/healthengine.ts`](src/healthengine.ts).

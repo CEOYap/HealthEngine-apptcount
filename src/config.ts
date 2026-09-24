@@ -1,20 +1,32 @@
 /**
- * Static per-weekday roster: the full list of slot start-times you work each day,
- * keyed by Sydney weekday (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat).
+ * Pattern-based roster settings. Rather than a fixed list of slot times per weekday,
+ * the roster for a day is generated from these rules plus the day's published slots
+ * (see src/roster.ts), so a variable finishing time never needs a config change.
  *
- * IMPORTANT: capture these from the availability feed on a ZERO-BOOKING day (e.g. an
- * empty future Monday such as 2026-06-15) so the times and granularity match the feed
- * exactly. Daily reads must use the same request shape as the capture.
- *
- * Leave a weekday empty until captured. The KV self-learning roster (src/roster.ts)
- * unions observed available times into these over time, so the stale-roster guard
- * self-corrects even if this seed is incomplete.
- *
- * Dr Brandon Lee works Mon, Tue, Thu, Sun — each with different hours.
+ * Dr Brandon Lee works Mon, Tue, Thu, Sun (Sydney weekday 0=Sun .. 6=Sat).
  */
-export const STATIC_ROSTER: Record<number, string[]> = {
-  0: [], // Sunday  — TODO: capture from an empty Sunday
-  1: [], // Monday  — TODO: capture from an empty Monday (e.g. 2026-06-15)
-  2: [], // Tuesday — TODO: capture from an empty Tuesday
-  4: [], // Thursday — TODO: capture from an empty Thursday
+
+/** Length of one appointment slot on the HealthEngine feed, in minutes. */
+export const SLOT_MINUTES = 10;
+
+/**
+ * Minutes past the hour that are blocked "Unavailable" in the practice software every
+ * half hour (e.g. 09:20, 09:50, 10:20 ...). These are never counted as bookings. If one
+ * of them is published as available on a given day it is simply treated as a normal slot.
+ */
+export const BREAK_MINUTES: number[] = [20, 50];
+
+/**
+ * First bookable slot (`HH:mm`) per working weekday. Slots from here up to the day's
+ * last published slot are counted; anything missing from the feed is a booking. If the
+ * feed publishes a slot earlier than this, the day simply starts earlier.
+ */
+export const DAY_START: Record<number, string> = {
+  0: '09:00', // Sunday
+  1: '09:00', // Monday
+  2: '09:00', // Tuesday
+  4: '09:00', // Thursday
 };
+
+/** Used for a weekday not listed in DAY_START. */
+export const DEFAULT_DAY_START = '09:00';

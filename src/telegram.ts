@@ -15,8 +15,8 @@ export function formatMessage(r: PipelineResult): string {
     const unknown = r.available.filter((t) => !r.roster.includes(t));
     return (
       `⚠️ <b>Roster looks outdated — ${escapeHtml(label)}</b>\n\n` +
-      `HealthEngine is publishing time(s) not in your roster: <b>${escapeHtml(unknown.join(', '))}</b>.\n` +
-      `Please update the roster for this weekday; today's count is unreliable.`
+      `HealthEngine is publishing time(s) off the slot grid: <b>${escapeHtml(unknown.join(', '))}</b>.\n` +
+      `The appointment length may have changed — update SLOT_MINUTES in src/config.ts; today's count is unreliable.`
     );
   }
 
@@ -28,14 +28,16 @@ export function formatMessage(r: PipelineResult): string {
     );
   }
 
+  const range = r.roster.length ? `\n<i>Counted ${r.roster[0]}–${r.roster[r.roster.length - 1]} (up to your last open slot).</i>` : '';
+
   if (r.count === 0) {
-    return `📋 <b>${escapeHtml(label)}</b>\n\nNo patients booked yet today.`;
+    return `📋 <b>${escapeHtml(label)}</b>\n\nNo patients booked yet today.${range}`;
   }
 
   return (
     `📋 <b>${escapeHtml(label)}</b>\n\n` +
     `<b>${r.count}</b> patient${r.count === 1 ? '' : 's'} booked.\n` +
-    `Times: ${escapeHtml(r.booked.join(', '))}`
+    `Times: ${escapeHtml(r.booked.join(', '))}${range}`
   );
 }
 

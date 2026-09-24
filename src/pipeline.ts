@@ -6,7 +6,7 @@
 
 import type { Env, Settings } from './env.js';
 import { extractPracticeData, fetchAvailability, findDoctorDates, slotsForDate } from './healthengine.js';
-import { getEffectiveRoster, learnSlots } from './roster.js';
+import { buildRoster, rulesForWeekday } from './roster.js';
 import { resolveDate, sydneyWeekday } from './time.js';
 
 export type Guard = 'none' | 'stale' | 'sanity';
@@ -21,8 +21,8 @@ export interface Evaluation {
  * Decide the outcome from a roster and the day's available slots.
  *
  * Guard order:
- *  1. stale-roster — any available time absent from the roster means the roster is out
- *     of date; report that rather than a wrong/negative count.
+ *  1. stale-roster — an available time absent from the roster (i.e. off the slot grid)
+ *     means the roster rules are out of date; report that rather than a wrong count.
  *  2. sanity — available slots <= threshold (default 0). Leave and a fully-booked day
  *     are indistinguishable from the public feed, so flag for a manual check.
  *  3. none — report the count of booked times (roster − available).
@@ -50,7 +50,7 @@ export interface PipelineResult {
   raw: unknown;
 }
 
-/** Full fetch -> parse -> learn -> evaluate run for a Sydney date spec. */
+/** Full fetch -> parse -> build roster -> evaluate run for a Sydney date spec. */
 export async function runPipeline(
   env: Env,
   settings: Settings,
@@ -66,14 +66,8 @@ export async function runPipeline(
   const available = slotsForDate(practiceData, date, env.DOCTOR_ID);
   const raw = { availableDates: Object.keys(dates).sort(), slots: dates[date] ?? [] };
 
-  // Read the roster as it stands BEFORE today's observation (static ∪ previously
-  // learned). Evaluating against this lets a newly-appearing slot trip the stale
-  // guard exactly once...
-  const roster = await getEffectiveRoster(env.ROSTER_KV, weekday);
+  const roster = buildRoster(available, rulesForWeekday(weekday));
   const { guard, booked, count } = evaluate(roster, available, settings.sanityThreshold);
-
-  // ...then learn today's slots so the guard self-corrects next time (never shrinks).
-  await learnSlots(env.ROSTER_KV, weekday, available);
 
   return { date, weekday, url, roster, available, booked, count, guard, raw };
 }

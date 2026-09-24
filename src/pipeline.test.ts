@@ -2,17 +2,8 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { Env, Settings } from './env.js';
 import { evaluate, runPipeline } from './pipeline.js';
 
-function fakeKv(initial: Record<string, string> = {}) {
-  const store = new Map<string, string>(Object.entries(initial));
+function fakeEnv(): Env {
   return {
-    get: async (k: string) => store.get(k) ?? null,
-    put: async (k: string, v: string) => void store.set(k, v),
-  } as unknown as KVNamespace;
-}
-
-function fakeEnv(kv: KVNamespace): Env {
-  return {
-    ROSTER_KV: kv,
     AVAILABILITY_URL: 'https://x/avail?doctor=__DOCTOR__&date=__DATE__',
     PRACTICE_ID: '101936',
     DOCTOR_ID: '137074',
@@ -84,31 +75,35 @@ describe('evaluate (subtraction + guards)', () => {
   });
 });
 
-describe('runPipeline (wiring + self-learning)', () => {
+describe('runPipeline (pattern roster)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test('learns a Monday roster, then reports a booked count the next Monday', async () => {
-    const kv = fakeKv();
-    const env = fakeEnv(kv);
-    // 2026-06-15 is a Monday. Day 1: full empty roster published (09:00, 09:15, 09:30).
-    vi.stubGlobal('fetch', mockFetchReturning({ '2026-06-15': ['09:00', '09:15', '09:30'] }));
-    const day1 = await runPipeline(env, settings, '2026-06-15', new Date('2026-06-14T22:00:00Z'));
-    // First sighting: roster was empty, so the new times trip the stale guard once.
-    expect(day1.guard).toBe('stale');
+  test('Thu 24 Sep 2026: counts bookings with a variable finish and half-hourly blocks', async () => {
+    // What HealthEngine published that morning (orange slots); the day ran to 16:40.
+    const available = [
+      '10:30', '11:10', '11:30', '11:40', '12:00', '12:10', '13:10', '13:30', '13:40',
+      '14:00', '14:10', '14:30', '14:40', '15:00', '15:10', '15:30', '15:40',
+      '16:00', '16:10', '16:30', '16:40',
+    ];
+    vi.stubGlobal('fetch', mockFetchReturning({ '2026-09-24': available }));
+    const r = await runPipeline(fakeEnv(), settings, '2026-09-24', new Date('2026-09-23T21:00:00Z'));
+    expect(r.guard).toBe('none');
+    expect(r.booked).toEqual([
+      '09:00', '09:10', '09:30', '09:40', '10:00', '10:10', '10:40', '11:00', '12:30', '12:40', '13:00',
+    ]);
+    expect(r.count).toBe(11);
+    expect(r.roster.at(-1)).toBe('16:40');
+  });
 
-    // Day 2 (next Monday 2026-06-22): 09:15 is now booked -> disappears.
-    vi.stubGlobal('fetch', mockFetchReturning({ '2026-06-22': ['09:00', '09:30'] }));
-    const day2 = await runPipeline(env, settings, '2026-06-22', new Date('2026-06-21T22:00:00Z'));
-    expect(day2.guard).toBe('none');
-    expect(day2.booked).toEqual(['09:15']);
-    expect(day2.count).toBe(1);
+  test('off-grid slot trips the stale guard', async () => {
+    vi.stubGlobal('fetch', mockFetchReturning({ '2026-06-15': ['09:00', '09:15'] }));
+    const r = await runPipeline(fakeEnv(), settings, '2026-06-15', new Date('2026-06-14T22:00:00Z'));
+    expect(r.guard).toBe('stale');
   });
 
   test('empty availability trips the sanity guard', async () => {
-    const kv = fakeKv({ 'roster:1': JSON.stringify(['09:00', '09:15']) });
-    const env = fakeEnv(kv);
     vi.stubGlobal('fetch', mockFetchReturning({ '2026-06-15': [] }));
-    const r = await runPipeline(env, settings, '2026-06-15', new Date('2026-06-14T22:00:00Z'));
+    const r = await runPipeline(fakeEnv(), settings, '2026-06-15', new Date('2026-06-14T22:00:00Z'));
     expect(r.guard).toBe('sanity');
   });
 });

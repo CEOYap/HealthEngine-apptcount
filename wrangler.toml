@@ -4,8 +4,6 @@
 #   TELEGRAM_BOT_TOKEN   - BotFather token
 #   TELEGRAM_CHAT_ID     - chat to message
 #   TRIGGER_TOKEN        - guards the /run debug endpoint
-#
-# KV namespace (create with `wrangler kv namespace create ROSTER_KV`, paste the id below).
 
 name = "healthengine-apptcount"
 main = "src/index.ts"
@@ -35,7 +33,3 @@ SEND_HOUR = "7"
 SANITY_THRESHOLD = "0"
 # Working weekdays (Sydney), 0=Sun .. 6=Sat. Mon, Tue, Thu, Sun.
 WORKING_DAYS = "0,1,2,4"
-
-[[kv_namespaces]]
-binding = "ROSTER_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"

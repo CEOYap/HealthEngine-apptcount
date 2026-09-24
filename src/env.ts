@@ -1,8 +1,5 @@
 /** Bindings, vars and secrets available to the Worker. Mirrors `wrangler.toml`. */
 export interface Env {
-  // KV namespace for the self-learning roster (running union of slot times per weekday).
-  ROSTER_KV: KVNamespace;
-
   // Vars (see wrangler.toml [vars]).
   AVAILABILITY_URL: string;
   PRACTICE_ID: string;

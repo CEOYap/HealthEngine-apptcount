@@ -26,6 +26,10 @@ describe('formatMessage', () => {
     expect(msg).toContain('09:30');
   });
 
+  test('states the counted range (start to last open slot)', () => {
+    expect(formatMessage(result({}))).toContain('Counted 09:00–09:30');
+  });
+
   test('zero bookings reads cleanly, not "0 ... Times:"', () => {
     const msg = formatMessage(result({ booked: [], count: 0, available: ['09:00', '09:15', '09:30'] }));
     expect(msg).toContain('No patients booked');

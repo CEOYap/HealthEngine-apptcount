@@ -1,55 +1,63 @@
 /**
- * Effective roster = static config (src/config.ts) UNION the self-learning set stored
- * in KV. Each working day we union the observed available times into KV, so the roster
- * converges to the true full set over time and the stale-roster guard self-corrects.
+ * Builds the day's roster from a pattern instead of a fixed list:
+ *
+ *   every SLOT_MINUTES slot from the day's start to the last published slot,
+ *   minus the half-hourly BREAK_MINUTES blocks.
+ *
+ * The finishing time is not fixed, so the end of the day is taken from the feed itself:
+ * the last available slot. Booked slots after that are invisible to the public feed and
+ * are not counted (the Telegram message states the cut-off time).
  */
 
-import { STATIC_ROSTER } from './config.js';
+import { BREAK_MINUTES, DAY_START, DEFAULT_DAY_START, SLOT_MINUTES } from './config.js';
 
-const KEY_PREFIX = 'roster:';
-
-/** KV key holding the learned union of slot times for a Sydney weekday. */
-function key(weekday: number): string {
-  return `${KEY_PREFIX}${weekday}`;
+export interface RosterRules {
+  start: string;
+  slotMinutes: number;
+  breakMinutes: number[];
 }
 
-async function readLearned(kv: KVNamespace, weekday: number): Promise<string[]> {
-  const raw = await kv.get(key(weekday));
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function union(...lists: string[][]): string[] {
-  return [...new Set(lists.flat())].sort();
+export function rulesForWeekday(weekday: number): RosterRules {
+  return {
+    start: DAY_START[weekday] ?? DEFAULT_DAY_START,
+    slotMinutes: SLOT_MINUTES,
+    breakMinutes: BREAK_MINUTES,
+  };
 }
 
 /**
- * The full roster for a weekday: static seed ∪ KV-learned ∪ any extra times passed in
- * (used by the pipeline to fold today's observation into the comparison set).
+ * The expected slot times for a day given what the feed is publishing. Returns `[]` when
+ * nothing is available (the sanity guard handles that case).
+ *
+ * Available times that are off the slot grid are deliberately left out, so they trip the
+ * stale guard: that means the appointment length changed and the rules need updating.
  */
-export async function getEffectiveRoster(
-  kv: KVNamespace,
-  weekday: number,
-  extra: string[] = [],
-): Promise<string[]> {
-  const learned = await readLearned(kv, weekday);
-  return union(STATIC_ROSTER[weekday] ?? [], learned, extra);
+export function buildRoster(available: string[], rules: RosterRules): string[] {
+  const onGrid = available.map(toMinutes).filter((m) => m % rules.slotMinutes === 0);
+  if (onGrid.length === 0) return [];
+
+  const availableSet = new Set(onGrid);
+  const first = Math.min(toMinutes(rules.start), ...onGrid);
+  const last = Math.max(...onGrid);
+  const breaks = new Set(rules.breakMinutes);
+
+  const roster: string[] = [];
+  for (let m = first; m <= last; m += rules.slotMinutes) {
+    if (breaks.has(m % 60) && !availableSet.has(m)) continue;
+    roster.push(toHHmm(m));
+  }
+  return roster;
 }
 
-/** Union today's observed available times into the learned set for this weekday (never shrinks). */
-export async function learnSlots(
-  kv: KVNamespace,
-  weekday: number,
-  observed: string[],
-): Promise<void> {
-  if (observed.length === 0) return;
-  const learned = await readLearned(kv, weekday);
-  const merged = union(learned, observed);
-  if (merged.length === learned.length && merged.every((t, i) => t === learned[i])) return;
-  await kv.put(key(weekday), JSON.stringify(merged));
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function toHHmm(minutes: number): string {
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
 }
