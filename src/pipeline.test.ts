@@ -10,14 +10,14 @@ function fakeEnv(): Env {
     TIMEZONE: 'Australia/Sydney',
     SEND_HOUR: '7',
     SANITY_THRESHOLD: '0',
-    WORKING_DAYS: '0,1,2,4',
+    WORKING_DAYS: '1,2,4,5',
     TELEGRAM_BOT_TOKEN: 't',
     TELEGRAM_CHAT_ID: 'c',
     TRIGGER_TOKEN: 'k',
   };
 }
 
-const settings: Settings = { sendHour: 7, sanityThreshold: 0, workingDays: new Set([0, 1, 2, 4]) };
+const settings: Settings = { sendHour: 7, sanityThreshold: 0, workingDays: new Set([1, 2, 4, 5]) };
 
 function hhmmToSeconds(t: string): number {
   const [h, m] = t.split(':').map(Number);

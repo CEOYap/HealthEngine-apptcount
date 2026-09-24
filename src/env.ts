@@ -27,7 +27,7 @@ export function readSettings(env: Env): Settings {
     sendHour: parseIntOr(env.SEND_HOUR, 7),
     sanityThreshold: parseIntOr(env.SANITY_THRESHOLD, 0),
     workingDays: new Set(
-      (env.WORKING_DAYS ?? '0,1,2,4')
+      (env.WORKING_DAYS ?? '1,2,4,5')
         .split(',')
         .map((s) => Number(s.trim()))
         .filter((n) => Number.isInteger(n)),

@@ -44,7 +44,7 @@ the real Sydney local hour via the `Intl` API and only the firing that lands on 
 07:00 local on a working weekday actually sends — the other (06:00/08:00 local)
 returns immediately. Result: exactly one message per working morning, no DST drift.
 
-Working days default to **Mon, Tue, Thu, Sun** (`WORKING_DAYS = "0,1,2,4"`, where
+Working days default to **Mon, Tue, Thu, Fri** (`WORKING_DAYS = "1,2,4,5"`, where
 0=Sun).
 
 ---

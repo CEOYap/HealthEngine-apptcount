@@ -31,5 +31,5 @@ SEND_HOUR = "7"
 # Sanity guard: if available slots <= this in the morning, send "likely leave or
 # fully booked" instead of a confident count. Default 0.
 SANITY_THRESHOLD = "0"
-# Working weekdays (Sydney), 0=Sun .. 6=Sat. Mon, Tue, Thu, Sun.
-WORKING_DAYS = "0,1,2,4"
+# Working weekdays (Sydney), 0=Sun .. 6=Sat. Mon, Tue, Thu, Fri.
+WORKING_DAYS = "1,2,4,5"

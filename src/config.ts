@@ -3,7 +3,7 @@
  * the roster for a day is generated from these rules plus the day's published slots
  * (see src/roster.ts), so a variable finishing time never needs a config change.
  *
- * Dr Brandon Lee works Mon, Tue, Thu, Sun (Sydney weekday 0=Sun .. 6=Sat).
+ * Dr Brandon Lee works Mon, Tue, Thu, Fri (Sydney weekday 0=Sun .. 6=Sat).
  */
 
 /** Length of one appointment slot on the HealthEngine feed, in minutes. */
@@ -22,10 +22,10 @@ export const BREAK_MINUTES: number[] = [20, 50];
  * feed publishes a slot earlier than this, the day simply starts earlier.
  */
 export const DAY_START: Record<number, string> = {
-  0: '09:00', // Sunday
   1: '09:00', // Monday
   2: '09:00', // Tuesday
   4: '09:00', // Thursday
+  5: '09:00', // Friday
 };
 
 /** Used for a weekday not listed in DAY_START. */
